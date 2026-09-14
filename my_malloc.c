@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <stdbool.h>
+
+//
+//
 
 typedef size_t P_SIZE;
 typedef size_t BHEAD_SIZE;
@@ -15,6 +19,7 @@ typedef struct arena_head {
   struct arena_head *next;
   size_t size;
   uintptr_t adress;
+  bool status;
 } arena_head;
 
 typedef struct buffer_head {
@@ -22,7 +27,11 @@ typedef struct buffer_head {
   struct buffer_head *next;
   arena_head *current_arena;
   size_t size;
+  bool status;
 } buffer_head;
+
+//
+//
 
 const P_SIZE SIZE_PAGE = 4096;
 const BHEAD_SIZE SIZE_BUFFER_HEAD = sizeof(buffer_head);
@@ -35,13 +44,20 @@ const SARENA_SIZE SIZE_SMALL_ARENA = SIZE_PAGE * 16;
 static arena_head *small_arena;
 static buffer_head *current_head;
 
+//
+//
+
 void *my_malloc(size_t size) {
-  size_t aligned_size = (16 - (size % 16)) + size;
-  //
-  size_t current_size = size + SIZE_BUFFER_HEAD;
-  size_t current_aligned_size = (16 - (current_size % 16)) + current_size;
+  
+  size_t aligned_size = (16 - (size % 16)) + size; // выравненный размера буфера
+  size_t current_size = size + SIZE_BUFFER_HEAD;   // фактический размер без выравнивания
+  size_t current_aligned_size = (16 - (current_size % 16)) + current_size; // фактический размер с выравниванием
 
   if (aligned_size >= SIZE_PAGE) {
+    //
+    // если размер буфера > 4кб (размер страницы)
+    // тогда создаем отдельную арену под буфер > 4кб
+    //
     uint8_t page_quantity = ceil((float_t)aligned_size / (float_t)SIZE_PAGE);
     size_t page_size = SIZE_PAGE * page_quantity;
 
@@ -55,9 +71,17 @@ void *my_malloc(size_t size) {
     r->next = NULL;
     r->size = aligned_size;
     r->adress = (uintptr_t)res;
-    return r;
-  } else {
-    if (!small_arena) {
+    return (void *)(r + 1);
+  } else { 
+    //
+    // иначе
+    // создаем буфер в small_arena
+    //
+    if (!small_arena) { 
+      //
+      // если нет small_arena, 
+      // тогда создаем small_arena
+      //
       void *p = mmap(NULL, SIZE_SMALL_ARENA, PROT_READ | PROT_WRITE,
                      MAP_SHARED | MAP_ANONYMOUS, -1, 0);
       if (p == MAP_FAILED) {
@@ -71,6 +95,10 @@ void *my_malloc(size_t size) {
       small_arena = pv;
     }
     if (current_aligned_size > small_arena->size) {
+      //
+      // если буфер больше свободного места в small_arena,
+      // тогда создаем новую small_arena
+      //
       void *p = mmap(NULL, SIZE_SMALL_ARENA, PROT_READ | PROT_WRITE,
                      MAP_SHARED | MAP_ANONYMOUS, -1, 0);
       arena_head *r;
