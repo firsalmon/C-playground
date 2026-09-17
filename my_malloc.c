@@ -93,7 +93,7 @@ void *my_malloc(size_t size) {
       pv->prev = NULL;
       pv->next = NULL;
       pv->size = SIZE_SMALL_ARENA;
-      pv->adress = (uintptr_t)p;
+      pv->adress = (uintptr_t)(pv + 1);
       small_arena = pv;
     }
     if (current_aligned_size > small_arena->size) {
@@ -103,7 +103,7 @@ void *my_malloc(size_t size) {
       //
       void *p = mmap(NULL, SIZE_SMALL_ARENA, PROT_READ | PROT_WRITE,
                      MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-      arena_head *r;
+      arena_head *r = (arena_head *)p;
       r->prev = small_arena;
       r->next = NULL;
       r->size = SIZE_SMALL_ARENA;
