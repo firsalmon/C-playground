@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/mman.h>
-#include <stdbool.h>
 
 //
 //
@@ -48,10 +47,13 @@ static buffer_head *current_head;
 //
 
 void *my_malloc(size_t size) {
-  
+
   size_t aligned_size = (16 - (size % 16)) + size; // выравненный размера буфера
-  size_t current_size = size + SIZE_BUFFER_HEAD;   // фактический размер без выравнивания
-  size_t current_aligned_size = (16 - (current_size % 16)) + current_size; // фактический размер с выравниванием
+  size_t current_size =
+      size + SIZE_BUFFER_HEAD; // фактический размер без выравнивания
+  size_t current_aligned_size =
+      (16 - (current_size % 16)) +
+      current_size; // фактический размер с выравниванием
 
   if (aligned_size >= SIZE_PAGE) {
     //
@@ -72,14 +74,14 @@ void *my_malloc(size_t size) {
     r->size = aligned_size;
     r->adress = (uintptr_t)res;
     return (void *)(r + 1);
-  } else { 
+  } else {
     //
     // иначе
     // создаем буфер в small_arena
     //
-    if (!small_arena) { 
+    if (!small_arena) {
       //
-      // если нет small_arena, 
+      // если нет small_arena,
       // тогда создаем small_arena
       //
       void *p = mmap(NULL, SIZE_SMALL_ARENA, PROT_READ | PROT_WRITE,
@@ -111,11 +113,28 @@ void *my_malloc(size_t size) {
       small_arena = r;
     }
     //
-    buffer_head *res = (buffer_head *)(small_arena->adress +
-                                       (SIZE_SMALL_ARENA - small_arena->size) +
-                                       SIZE_ARENA_HEAD);
+    // добавляем буфер в small_arena
+    // возвращаем буфер
+    //
+    buffer_head *res = (buffer_head *)(small_arena->adress);
+    res->current_arena = small_arena;
+    res->size = current_aligned_size;
+    res->prev = NULL;
+    res->next = NULL;
+    res->status = true;
 
-    return 0;
+    if (!current_head) {
+      current_head = res;
+    } else {
+      current_head->next = res;
+      res->prev = current_head;
+      current_head = res;
+    }
+
+    small_arena->adress = small_arena->adress + current_aligned_size;
+    small_arena->size = small_arena->size - current_aligned_size;
+
+    return (void *)(res + 1);
   }
 }
 
