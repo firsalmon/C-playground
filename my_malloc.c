@@ -44,23 +44,25 @@ static arena_head *small_arena;
 static buffer_head *current_head;
 
 //
+size_t align16(size_t x) { return ((x + 15) & ~15); }
 //
 
 void *my_malloc(size_t size) {
 
-  size_t aligned_size = (16 - (size % 16)) + size; // выравненный размера буфера
-  size_t current_size =
-      size + SIZE_BUFFER_HEAD; // фактический размер без выравнивания
-  size_t current_aligned_size =
-      (16 - (current_size % 16)) +
-      current_size; // фактический размер с выравниванием
+  size_t aligned_size = align16(size);
+  size_t aligned_buffer_head = align16(SIZE_BUFFER_HEAD);
+  size_t aligned_current_size = aligned_size + aligned_buffer_head;
 
-  if (aligned_size >= SIZE_PAGE) {
+  if (aligned_current_size >= SIZE_PAGE) {
     //
     // если размер буфера > 4кб (размер страницы)
     // тогда создаем отдельную арену под буфер > 4кб
+    // ps а когда будет использоваться free() то просто освободим страницы под
+    // буфер (поэтому и не вижу особо смысла делать ссылки на другие большие
+    // буферы)
     //
-    uint8_t page_quantity = ceil((float_t)aligned_size / (float_t)SIZE_PAGE);
+    size_t page_quantity =
+        ceil((float_t)aligned_current_size / (float_t)SIZE_PAGE);
     size_t page_size = SIZE_PAGE * page_quantity;
 
     void *res = mmap(NULL, page_size, PROT_READ | PROT_WRITE,
@@ -73,7 +75,12 @@ void *my_malloc(size_t size) {
     r->next = NULL;
     r->size = aligned_size;
     r->adress = (uintptr_t)res;
-    return (void *)(r + 1);
+    r->status = true;
+    uintptr_t *mid_r = (uintptr_t *)(r + 1);
+    mid_r += (aligned_buffer_head - SIZE_BUFFER_HEAD);
+    return (void *)(mid_r);
+    //
+    //
   } else {
     //
     // иначе
