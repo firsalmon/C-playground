@@ -44,18 +44,21 @@ static arena_head *small_arena;
 static buffer_head *current_head;
 
 //
+int align16(size_t x) {
+  return ((x + 15) & ~15);
+}
 //
 
 void *my_malloc(size_t size) {
 
-  size_t aligned_size = (16 - (size % 16)) + size; // выравненный размера буфера
-  size_t current_size =
-      size + SIZE_BUFFER_HEAD; // фактический размер без выравнивания
-  size_t current_aligned_size =
-      (16 - (current_size % 16)) +
-      current_size; // фактический размер с выравниванием
+  size_t aligned_size = align16(size); // выравненный размера буфера
+  size_t aligned_buffer_head = align16(SIZE_BUFFER_HEAD); //выровненный размер заголовка буфера
 
-  if (aligned_size >= SIZE_PAGE) {
+  //
+  size_t current_aligned_size = aligned_size + aligned_buffer_head;
+  //
+
+  if (current_aligned_size >= SIZE_PAGE) {
     //
     // если размер буфера > 4кб (размер страницы)
     // тогда создаем отдельную арену под буфер > 4кб
