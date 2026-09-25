@@ -70,11 +70,10 @@ void *my_malloc(size_t size) {
     if (res == MAP_FAILED) {
       return NULL;
     }
-    arena_head *r = (arena_head *)res;
+    buffer_head *r = (buffer_head *)res;
     r->prev = NULL;
     r->next = NULL;
     r->size = aligned_size;
-    r->adress = (uintptr_t)res;
     r->status = true;
     uintptr_t mid_r = (uintptr_t)(r + 1);
     mid_r += (aligned_buffer_head - SIZE_BUFFER_HEAD);
