@@ -51,19 +51,21 @@ void *my_malloc(size_t size) {
 
   size_t aligned_size = align16(size);
   size_t aligned_buffer_head = align16(SIZE_BUFFER_HEAD);
+  size_t aligned_arena_head = align16(SIZE_ARENA_HEAD);
   size_t aligned_current_size = aligned_size + aligned_buffer_head;
 
   if (aligned_current_size >= SIZE_PAGE) {
     //
     // если размер буфера > 4кб (размер страницы)
     // тогда создаем отдельную арену под буфер > 4кб
+    //
     // ps а когда будет использоваться free() то просто освободим страницы под
     // буфер (поэтому и не вижу особо смысла делать ссылки на другие большие
     // буферы)
     //
     size_t page_quantity =
         ceil((float_t)aligned_current_size / (float_t)SIZE_PAGE);
-    size_t page_size = SIZE_PAGE * page_quantity;
+    size_t page_size = SIZE_PAGE * page_quantity + aligned_buffer_head;
 
     void *res = mmap(NULL, page_size, PROT_READ | PROT_WRITE,
                      MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -99,15 +101,18 @@ void *my_malloc(size_t size) {
       pv->prev = NULL;
       pv->next = NULL;
       pv->size = SIZE_SMALL_ARENA;
-      pv->adress = (uintptr_t)(pv + 1);
+      uintptr_t mid_r = (uintptr_t)(pv + 1);
+      mid_r += (aligned_arena_head - SIZE_ARENA_HEAD);
+      pv->adress = (uintptr_t)(pv + 1) + mid_r;
+      
       small_arena = pv;
     }
-    if (current_aligned_size > small_arena->size) {
+    if (aligned_current_size > small_arena->size) {
       //
       // если буфер больше свободного места в small_arena,
       // тогда создаем новую small_arena
       //
-      void *p = mmap(NULL, SIZE_SMALL_ARENA, PROT_READ | PROT_WRITE,
+      void *p = mmap(NULL, SIZE_SMALL_ARENA + aligned_arena_head, PROT_READ | PROT_WRITE,
                      MAP_SHARED | MAP_ANONYMOUS, -1, 0);
       arena_head *r = (arena_head *)p;
       r->prev = small_arena;
