@@ -6,6 +6,8 @@
 #include <sys/mman.h>
 
 //
+// все комменты будут ниже нужны чтобы вспомнить что делал
+// потому что в последнее время времени мало из-за работы
 //
 
 typedef size_t P_SIZE;
@@ -30,7 +32,6 @@ typedef struct buffer_head {
 } buffer_head;
 
 //
-//
 
 const P_SIZE SIZE_PAGE = 4096;
 const BHEAD_SIZE SIZE_BUFFER_HEAD = sizeof(buffer_head);
@@ -38,59 +39,75 @@ const AHEAD_SIZE SIZE_ARENA_HEAD = sizeof(arena_head);
 const SARENA_SIZE SIZE_SMALL_ARENA = SIZE_PAGE * 16;
 
 //
-//
 
 static arena_head *small_arena;
 static buffer_head *current_head;
 
 //
-size_t align16(size_t x) { return ((x + 15) & ~15); }
+
+size_t align16(size_t x) {
+  return ((x + 15) & ~15);
+} // функция для выравнивания
+
+void *create_arena_or_buffer() {
+}; // возможно будущая функция для создания арен/буферов (для DRY)
+
 //
 
 void *my_malloc(size_t size) {
 
-  size_t aligned_size = align16(size);
-  size_t aligned_buffer_head = align16(SIZE_BUFFER_HEAD);
-  size_t aligned_arena_head = align16(SIZE_ARENA_HEAD);
-  size_t aligned_current_size = aligned_size + aligned_buffer_head;
+  size_t aligned_size = align16(size); // выровненный размер буфера
+  size_t aligned_buffer_head =
+      align16(SIZE_BUFFER_HEAD); // выровненный размер заголовка буфера
+  size_t aligned_arena_head =
+      align16(SIZE_ARENA_HEAD); // выровненный размер заголовка арены
+  size_t aligned_current_size =
+      aligned_size +
+      aligned_buffer_head; // выровненный итоговый размер заголовка + буфера
 
   if (aligned_current_size >= SIZE_PAGE) {
     //
     // если размер буфера > 4кб (размер страницы)
     // тогда создаем отдельную арену под буфер > 4кб
     //
-    // ps а когда будет использоваться free() то просто освободим страницы под
-    // буфер (поэтому и не вижу особо смысла делать ссылки на другие большие
-    // буферы)
+    // ps при использовании free() large buffer будут удаляться
+    // с помощью syscall (признаком large buffer пока будет размер)
     //
-    size_t page_quantity =
-        ceil((float_t)aligned_current_size / (float_t)SIZE_PAGE);
-    size_t page_size = SIZE_PAGE * page_quantity + aligned_buffer_head;
+    size_t page_quantity = ceil(
+        (float_t)aligned_current_size /
+        (float_t)
+            SIZE_PAGE); // количество страниц необходимое для создания буфера
+    size_t page_size =
+        SIZE_PAGE * page_quantity +
+        aligned_buffer_head; // итоговый размер (размер страницы(4kb) *
+                             // количество страниц + выровненный заголовок
+                             // буфера)
 
     void *res = mmap(NULL, page_size, PROT_READ | PROT_WRITE,
                      MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if (res == MAP_FAILED) {
       return NULL;
     }
-    buffer_head *r = (buffer_head *)res;
+    buffer_head *r = (buffer_head *)res; // первым будет записываться буфер
     r->prev = NULL;
     r->next = NULL;
-    r->size = aligned_size;
     r->status = true;
-    uintptr_t mid_r = (uintptr_t)(r + 1);
-    mid_r += (aligned_buffer_head - SIZE_BUFFER_HEAD);
+    r->size = aligned_size;
+    uintptr_t mid_r =
+        (uintptr_t)(r +
+                    1); // перемещаем указатель и превращаем адрес в uintptr_t
+    mid_r += (aligned_buffer_head -
+              SIZE_BUFFER_HEAD); // смещаем указатель вправо для выравнивания
     return (void *)(mid_r);
     //
     //
   } else {
     //
-    // иначе
-    // создаем буфер в small_arena
+    // иначе -> создаем буфер в small_arena
     //
     if (!small_arena) {
       //
-      // если нет small_arena,
-      // тогда создаем small_arena
+      // если нет small_arena -> создаем арену
       //
       void *p = mmap(NULL, SIZE_SMALL_ARENA, PROT_READ | PROT_WRITE,
                      MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -102,18 +119,20 @@ void *my_malloc(size_t size) {
       pv->next = NULL;
       pv->size = SIZE_SMALL_ARENA;
       uintptr_t mid_r = (uintptr_t)(pv + 1);
-      mid_r += (aligned_arena_head - SIZE_ARENA_HEAD);
+      mid_r +=
+          (aligned_arena_head -
+           SIZE_ARENA_HEAD); // перемещение указателя вправо для выравнивания
       pv->adress = (uintptr_t)(pv + 1) + mid_r;
-      
+
       small_arena = pv;
     }
     if (aligned_current_size > small_arena->size) {
       //
       // если буфер больше свободного места в small_arena,
-      // тогда создаем новую small_arena
+      // тогда создаем новую small_arena для буфера
       //
-      void *p = mmap(NULL, SIZE_SMALL_ARENA + aligned_arena_head, PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+      void *p = mmap(NULL, SIZE_SMALL_ARENA + aligned_arena_head,
+                     PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
       arena_head *r = (arena_head *)p;
       r->prev = small_arena;
       r->next = NULL;
